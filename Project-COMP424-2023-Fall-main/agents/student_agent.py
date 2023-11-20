@@ -45,15 +45,15 @@ class StudentAgent(Agent):
         # time_taken during your search and breaking with the best answer
         # so far when it nears 2 seconds.
         start_time = time.time()
+        
+        
+        my_step = self.alpha_beta(self,chess_board, my_pos, adv_pos, max_step, -sys.maxsize, sys.maxsize, 0, 5)
+
         time_taken = time.time() - start_time
-        
-        
-        
-        
         print("My AI's turn took ", time_taken, "seconds.")
 
         # dummy return
-        return my_pos, self.dir_map["u"]
+        return my_step 
     #TODO: make sure this properly works
     
     def check_endgame(self):
@@ -84,6 +84,7 @@ class StudentAgent(Agent):
 
         for r in range(self.board_size):
             for c in range(self.board_size):
+                # Check down and right
                 for dir, move in enumerate(
                     self.moves[1:3]
                 ):  # Only check down and right
@@ -127,11 +128,12 @@ class StudentAgent(Agent):
         #function to calculate number of steps away from adv_pos
         if self.check_endgame(self)[0]:
             if self.check_endgame(self)[1] > self.check_endgame(self)[2]:
-                return 2000
+                return 20000
             else:
-                return -2000
+                return -20000
         else:
-            moves = self.get_player_moves(chess_board, my_pos, adv_pos, max_step)
+            #calculate advs possible moves
+            moves = self.get_player_moves(self,chess_board, adv_pos, my_pos, max_step)
             cur_move_score -= len(moves)
             #check if my_pos is adjacent to two walls
             if self.check_two_walls(chess_board,my_pos):
@@ -149,54 +151,73 @@ class StudentAgent(Agent):
                     if chess_board[r,c,d] and chess_board[r,c,d2]:
                         return True
         return False
-    #TODO: change minPlayerMoves to get_player_moves
+   
+    def get_player_moves(self, chess_board, my_pos, adv_pos, max_step):
+        moves = []
+        dirs = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        steps = max_step
+        
+        for s in range(steps):
+            moves.append(self.take_steps(self,chess_board, my_pos, adv_pos, s, dirs,moves))
+        return moves
     
-    def min_player_moves(self, chess_board, my_pos, adv_pos, max_step):
+    def take_steps(self,chess_board, my_pos, adv_pos, s, dirs,moves):
         """
         Get all possible moves for the current player
         """
-        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
-        steps = max_step
-        # Pick steps random but allowable moves
-        for _ in range(steps):
-            r, c = adv_pos
+        r,c = my_pos
+        if s != 0:
+            for d in range(0,4):
+                #check if the move is valid
+                my_pos = (r+dirs[d][0],c+dirs[d][1])
+                if not chess_board[r,c,d] and not adv_pos == my_pos :
+                   self.take_steps(self,chess_board, my_pos, adv_pos, s-1, dirs,moves)
+        else:
+            if not my_pos in moves:
+                for d in range(0,4):
+                    #check where can i place a wall
+                    if not chess_board[r,c,d]:
+                        moves.append(tuple(my_pos,d))
+            return moves 
 
-            # Build a list of the moves we can make
-            allowed_moves = [d
-                            for d in range(0, 4)  # 4 moves possible
-                            if not chess_board[r, c, d] and  # chess_board True means wall
-                            not my_pos == (r + moves[d][0], c + moves[d][1])]
-            # cannot move through ME
-            return allowed_moves
-        
+
+    
     
     def alpha_beta(self, chess_board, my_pos, adv_pos, max_step, alpha, beta, depth, max_depth):
         """
         Implement the alpha-beta pruning algorithm here.
         """
-        if depth == max_depth:
-            return self.heuristic(chess_board, my_pos, adv_pos, max_step)
+        #check if the game is over
+        if depth == max_depth or self.check_endgame(self)[0]:
+
+            return tuple(my_pos,self.heuristic(self,chess_board,my_pos,adv_pos,max_step))
+        #get all possible moves for the current player
+        moves = self.get_player_moves(self,chess_board, my_pos, adv_pos, max_step)
+        best_move = moves[0]
+        #if it is my turn
+        if depth % 2 == 0:
+            for move in moves:
+                #get the next state
+                next_state = self.alpha_beta(self,chess_board, move[0], adv_pos, max_step, alpha, beta, depth+1, max_depth)
+                #check if the next state is better than the current state
+                if next_state > alpha:
+                    alpha = next_state
+                    best_move = move
+                #check if the next state is better than the current state
+                if beta <= alpha:
+                    break
+            return tuple(best_move,alpha)
+        #if it is the adversary's turn
         else:
-            if depth % 2 == 0:
-                #max player
-                moves = self.get_player_moves(chess_board, my_pos, adv_pos, max_step)
-                for move in moves:
-                    new_chess_board = deepcopy(chess_board)
-                    new_chess_board[my_pos[0], my_pos[1], move] = True
-                    new_my_pos = (my_pos[0] + self.moves[move][0], my_pos[1] + self.moves[move][1])
-                    alpha = max(alpha, self.alpha_beta(new_chess_board, new_my_pos, adv_pos, max_step, alpha, beta, depth + 1, max_depth))
-                    if alpha >= beta:
-                        break
-                return alpha
-            else:
-                #min player
-                moves = self.min_player_moves(chess_board, my_pos, adv_pos, max_step)
-                for move in moves:
-                    new_chess_board = deepcopy(chess_board)
-                    new_chess_board[adv_pos[0], adv_pos[1], move] = True
-                    new_adv_pos = (adv_pos[0] + self.moves[move][0], adv_pos[1] + self.moves[move][1])
-                    beta = min(beta, self.alpha_beta(new_chess_board, my_pos, new_adv_pos, max_step, alpha, beta, depth + 1, max_depth))
-                    if alpha >= beta:
-                        break
-                return beta
+            for move in moves:
+                #get the next state
+                next_state = self.alpha_beta(self,chess_board, my_pos, move[0], max_step, alpha, beta, depth+1, max_depth)
+                #check if the next state is better than the current state
+                if next_state < beta:
+                    beta = next_state
+                    best_move = move
+                #check if the next state is better than the current state
+                if beta <= alpha:
+                    break
+            return tuple(best_move,beta)
         
