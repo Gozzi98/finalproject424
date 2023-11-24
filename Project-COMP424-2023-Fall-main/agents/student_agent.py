@@ -7,6 +7,7 @@ from copy import deepcopy
 import time
 import logging
 
+# python simulator.py --player_1 student_agent --player_2 random_agent --display
 
 @register_agent("student_agent")
 class StudentAgent(Agent):
@@ -47,7 +48,7 @@ class StudentAgent(Agent):
         start_time = time.time()
         
         
-        my_step = self.alpha_beta(self,chess_board, my_pos, adv_pos, max_step, -sys.maxsize, sys.maxsize, 0, 5)
+        my_step = self.alpha_beta(chess_board, my_pos, adv_pos, max_step, -sys.maxsize, sys.maxsize, 0, 1)
 
         time_taken = time.time() - start_time
         print("My AI's turn took ", time_taken, "seconds.")
@@ -56,7 +57,7 @@ class StudentAgent(Agent):
         return my_step 
     #TODO: make sure this properly works
     
-    def check_endgame(self):
+    def check_endgame(self, chess_board, my_pos, adv_pos):
         """
         Check if the game ends and compute the current score of the agents.
 
@@ -69,11 +70,17 @@ class StudentAgent(Agent):
         player_2_score : int
             The score of player 2.
         """
+
+        dirs = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        board_size = len(chess_board)
+
+
         # Union-Find
         father = dict()
-        for r in range(self.board_size):
-            for c in range(self.board_size):
+        for r in range(board_size):
+            for c in range(board_size):
                 father[(r, c)] = (r, c)
+
         def find(pos):
             if father[pos] != pos:
                 father[pos] = find(father[pos])
@@ -82,31 +89,30 @@ class StudentAgent(Agent):
         def union(pos1, pos2):
             father[pos1] = pos2
 
-        for r in range(self.board_size):
-            for c in range(self.board_size):
+        for r in range(board_size):
+            for c in range(board_size):
                 # Check down and right
                 for dir, move in enumerate(
-                    self.moves[1:3]
+                    dirs[1:3]
                 ):  # Only check down and right
-                    if self.chess_board[r, c, dir + 1]:
+                    if chess_board[r, c, dir + 1]:
                         continue
                     pos_a = find((r, c))
                     pos_b = find((r + move[0], c + move[1]))
                     if pos_a != pos_b:
                         union(pos_a, pos_b)
 
-        for r in range(self.board_size):
-            for c in range(self.board_size):
+        for r in range(board_size):
+            for c in range(board_size):
                 find((r, c))
-        p0_r = find(tuple(self.p0_pos))
-        p1_r = find(tuple(self.p1_pos))
+        p0_r = find(my_pos)
+        p1_r = find(adv_pos)
         p0_score = list(father.values()).count(p0_r)
         p1_score = list(father.values()).count(p1_r)
         if p0_r == p1_r:
             return False, p0_score, p1_score
-        
         return True, p0_score, p1_score
-    
+
     def get_current_player(self):
         """
         Get the positions of the current player
@@ -125,17 +131,20 @@ class StudentAgent(Agent):
         Implement the heuristic function of your agent here.      
         """
         cur_move_score = 0
-        #function to calculate number of steps away from adv_pos
-        if self.check_endgame(self)[0]:
-            if self.check_endgame(self)[1] > self.check_endgame(self)[2]:
+        # function to calculate number of steps away from adv_pos
+        endgame = self.check_endgame(chess_board, my_pos, adv_pos)
+        if endgame[0]:
+            if endgame[1] > endgame[2]:
                 return 20000
+            elif endgame[1] == endgame[2]:
+                return -10000
             else:
                 return -20000
         else:
-            #calculate advs possible moves
-            moves = self.get_player_moves(self,chess_board, adv_pos, my_pos, max_step)
+            # calculate advs possible moves
+            moves = self.get_player_moves(chess_board, adv_pos, my_pos, max_step)
             cur_move_score -= len(moves)
-            #check if my_pos is adjacent to two walls
+            # check if my_pos is adjacent to two walls
             if self.check_two_walls(chess_board,my_pos):
                 cur_move_score -= 500
             
@@ -155,31 +164,37 @@ class StudentAgent(Agent):
     def get_player_moves(self, chess_board, my_pos, adv_pos, max_step):
         moves = []
         dirs = ((-1, 0), (0, 1), (1, 0), (0, -1))
-        steps = max_step
-        
-        for s in range(steps):
-            moves.append(self.take_steps(self,chess_board, my_pos, adv_pos, s, dirs,moves))
+
+        for s in range(max_step):
+            self.take_steps(chess_board, my_pos, adv_pos, s, dirs, moves)
         return moves
     
-    def take_steps(self,chess_board, my_pos, adv_pos, s, dirs,moves):
-        """
-        Get all possible moves for the current player
-        """
+    def take_steps(self,chess_board, my_pos, adv_pos, s, dirs, moves):
+        # Get all possible moves for the current player
+
+
         r,c = my_pos
         if s != 0:
             for d in range(0,4):
-                #check if the move is valid
-                my_pos = (r+dirs[d][0],c+dirs[d][1])
-                if not chess_board[r,c,d] and not adv_pos == my_pos :
-                   self.take_steps(self,chess_board, my_pos, adv_pos, s-1, dirs,moves)
+                # check if the move is valid
+                my_pos = (r+dirs[d][0], c+dirs[d][1])
+                if not chess_board[r, c, d] and not adv_pos == my_pos:
+                    self.take_steps(chess_board, my_pos, adv_pos, s-1, dirs, moves)
         else:
-            if not my_pos in moves:
+            my_pos_present = False
+            for pos in moves:
+                if pos is None:
+                    moves.remove(pos)
+                    continue
+                if np.array_equal(my_pos, pos[0]):
+                    my_pos_present = True
+                    break
+            if not my_pos_present:
                 for d in range(0,4):
-                    #check where can i place a wall
-                    if not chess_board[r,c,d]:
-                        moves.append(tuple(my_pos,d))
-            return moves 
-
+                    # check where can i place a wall
+                    if not chess_board[r, c, d]:
+                        moves.append((my_pos, d))
+            return moves
 
     
     
@@ -187,37 +202,37 @@ class StudentAgent(Agent):
         """
         Implement the alpha-beta pruning algorithm here.
         """
-        #check if the game is over
-        if depth == max_depth or self.check_endgame(self)[0]:
+        # check if the game is over
+        if depth == max_depth or self.check_endgame(chess_board, my_pos, adv_pos)[0]:
 
-            return tuple(my_pos,self.heuristic(self,chess_board,my_pos,adv_pos,max_step))
-        #get all possible moves for the current player
-        moves = self.get_player_moves(self,chess_board, my_pos, adv_pos, max_step)
+            return my_pos, self.heuristic(chess_board, my_pos, adv_pos, max_step)
+        # get all possible moves for the current player
+        moves = self.get_player_moves(chess_board, my_pos, adv_pos, max_step)
         best_move = moves[0]
-        #if it is my turn
+        # if it is my turn
         if depth % 2 == 0:
             for move in moves:
-                #get the next state
-                next_state = self.alpha_beta(self,chess_board, move[0], adv_pos, max_step, alpha, beta, depth+1, max_depth)
-                #check if the next state is better than the current state
-                if next_state > alpha:
-                    alpha = next_state
+                # get the next state
+                next_state = self.alpha_beta(chess_board, move[0], adv_pos, max_step, alpha, beta, depth+1, max_depth)
+                # check if the next state is better than the current state
+                if next_state[1] > alpha:
+                    alpha = next_state[1]
                     best_move = move
-                #check if the next state is better than the current state
+                # check if the next state is better than the current state
                 if beta <= alpha:
                     break
-            return tuple(best_move,alpha)
-        #if it is the adversary's turn
+            return best_move, alpha
+        # if it is the adversary's turn
         else:
             for move in moves:
-                #get the next state
-                next_state = self.alpha_beta(self,chess_board, my_pos, move[0], max_step, alpha, beta, depth+1, max_depth)
-                #check if the next state is better than the current state
-                if next_state < beta:
-                    beta = next_state
+                # get the next state
+                next_state = self.alpha_beta(chess_board, my_pos, move[0], max_step, alpha, beta, depth+1, max_depth)
+                # check if the next state is better than the current state
+                if next_state[1] < beta:
+                    beta = next_state[1]
                     best_move = move
-                #check if the next state is better than the current state
+                # check if the next state is better than the current state
                 if beta <= alpha:
                     break
-            return tuple(best_move,beta)
-        
+            return best_move,beta
+
