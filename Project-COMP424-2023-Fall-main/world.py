@@ -310,23 +310,31 @@ class World:
         state_queue = [(start_pos, 0)]
         visited = {tuple(start_pos)}
         is_reached = False
+        # BFS to check if the end_pos is reachable
         while state_queue and not is_reached:
+            # Get the current position and step
             cur_pos, cur_step = state_queue.pop(0)
             r, c = cur_pos
+            # If the current step is equal than max_step, break
             if cur_step == self.max_step:
-                break
+                break   
+            # Check all possible moves
             for dir, move in enumerate(self.moves):
+                # If there is a barrier, skip
                 if self.chess_board[r, c, dir]:
                     continue
-
+                # If the next position is the adversary, skip
                 next_pos = cur_pos + move
+                # Check if the next position is valid
                 if np.array_equal(next_pos, adv_pos) or tuple(next_pos) in visited:
                     continue
+                # Check if the next position is the end position
                 if np.array_equal(next_pos, end_pos):
                     is_reached = True
                     break
-
+                # Add the next position to the queue
                 visited.add(tuple(next_pos))
+                # Add the next state to the queue
                 state_queue.append((next_pos, cur_step + 1))
 
         return is_reached
@@ -351,7 +359,9 @@ class World:
                 father[(r, c)] = (r, c)
 
         def find(pos):
+            # Path compression
             if father[pos] != pos:
+                # If not root, recursively find the root
                 father[pos] = find(father[pos])
             return father[pos]
 
@@ -360,13 +370,19 @@ class World:
 
         for r in range(self.board_size):
             for c in range(self.board_size):
+                # Check down and right
                 for dir, move in enumerate(
+                    # Only check down and right
                     self.moves[1:3]
                 ):  # Only check down and right
+                    # If there is a barrier, skip
                     if self.chess_board[r, c, dir + 1]:
                         continue
+                    # If the next position is the adversary, skip
                     pos_a = find((r, c))
+                    # Check if the next position is valid
                     pos_b = find((r + move[0], c + move[1]))
+                    # Check if the next position is the end position
                     if pos_a != pos_b:
                         union(pos_a, pos_b)
 
