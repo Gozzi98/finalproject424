@@ -48,14 +48,13 @@ class StudentAgent(Agent):
         start_time = time.time()
         
         
-        my_step = self.alpha_beta(self,chess_board, my_pos, adv_pos, max_step, -sys.maxsize, sys.maxsize, 0, 5)
+        my_step = self.alpha_beta(chess_board, my_pos, adv_pos, max_step, -sys.maxsize, sys.maxsize, 0, 3)
 
         time_taken = time.time() - start_time
         print("My AI's turn took ", time_taken, "seconds.")
 
-        # dummy return
-        return my_step 
-    #TODO: make sure this properly works
+        return my_step[0]
+    
     
     def check_endgame(self, chess_board, my_pos, adv_pos):
         """
@@ -149,8 +148,10 @@ class StudentAgent(Agent):
             cur_move_score -= len(moves)
             # check if my_pos is adjacent to two walls
             if self.check_two_walls(chess_board,my_pos):
-                cur_move_score -= 500
-            
+                cur_move_score -= 1000
+            if self.check_one_wall(chess_board,my_pos):
+                cur_move_score -= 750
+        # print(cur_move_score)
         return cur_move_score
     def check_one_wall(self,chess_board,my_pos):
         """
@@ -181,10 +182,9 @@ class StudentAgent(Agent):
             self.take_steps(chess_board, my_pos, adv_pos, s, dirs, moves)
         return moves
     
-    def take_steps(self,chess_board, my_pos, adv_pos, s, dirs,moves):
-        """
-        Get all possible moves for the current player
-        """
+    def take_steps(self,chess_board, my_pos, adv_pos, s, dirs, moves):
+        # Get all possible moves for the current player
+
         r,c = my_pos
         if s != 0:
             for d in range(0,4):
@@ -221,32 +221,49 @@ class StudentAgent(Agent):
         # get all possible moves for the current player
         moves = self.get_player_moves(chess_board, my_pos, adv_pos, max_step)
         best_move = moves[0]
-        #if it is my turn
+        last_move = None
+        # if it is my turn
         if depth % 2 == 0:
             max_eval = -sys.maxsize
             for move in moves:
-                #get the next state
-                next_state = self.alpha_beta(self,chess_board, move[0], adv_pos, max_step, alpha, beta, depth+1, max_depth)
-                #check if the next state is better than the current state
-                if next_state > alpha:
-                    alpha = next_state
-                    best_move = move
-                #check if the next state is better than the current state
-                if beta <= alpha:
-                    break
-            return tuple(best_move,alpha)
-        #if it is the adversary's turn
+                new_board = deepcopy(chess_board)
+                # place the wall
+                new_board[move[0][0], move[0][1], move[1]] = True
+
+                if move[0] == last_move:
+                    continue
+                else:
+                    last_move = move[0]
+                    # get the next state
+                    next_state = self.alpha_beta(new_board, move[0], adv_pos, max_step, alpha, beta, depth+1, max_depth)
+                    # check if the next state is better than the current state
+                    if next_state[1] > max_eval:
+                        max_eval = next_state[1]
+                        best_move = move
+                    # check if the next state is better than the current state
+                    alpha = max(alpha, next_state[1])
+                    if beta <= alpha:
+                        break
+            return best_move, max_eval
+        # if it is the adversary's turn
         else:
             min_eval = sys.maxsize
             for move in moves:
-                #get the next state
-                next_state = self.alpha_beta(self,chess_board, my_pos, move[0], max_step, alpha, beta, depth+1, max_depth)
-                #check if the next state is better than the current state
-                if next_state < beta:
-                    beta = next_state
-                    best_move = move
-                #check if the next state is better than the current state
-                if beta <= alpha:
-                    break
-            return tuple(best_move,beta)
-        
+                new_board = deepcopy(chess_board)
+                # place the wall
+                new_board[move[0][0], move[0][1], move[1]] = True
+                if move[0] == last_move:
+                    continue
+                else:
+                    last_move = move[0]
+                    # get the next state
+                    next_state = self.alpha_beta(new_board, my_pos, move[0], max_step, alpha, beta, depth+1, max_depth)
+                    # check if the next state is better than the current state
+                    if next_state[1] < min_eval:
+                        min_eval = next_state[1]
+                        best_move = move
+                    # check if the next state is better than the current state
+                    beta = min(beta, next_state[1])
+                    if beta <= alpha:
+                        break
+            return best_move,beta
